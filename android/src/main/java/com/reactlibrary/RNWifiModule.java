@@ -2,16 +2,6 @@ package com.reactlibrary;
 
 import com.facebook.react.uimanager.*;
 import com.facebook.react.bridge.*;
-import com.facebook.systrace.Systrace;
-import com.facebook.systrace.SystraceMessage;
-// import com.facebook.react.LifecycleState;
-import com.facebook.react.ReactInstanceManager;
-import com.facebook.react.ReactRootView;
-import com.facebook.react.modules.core.DefaultHardwareBackBtnHandler;
-import com.facebook.react.modules.core.DeviceEventManagerModule;
-import com.facebook.react.shell.MainReactPackage;
-import com.facebook.soloader.SoLoader;
-
 import android.provider.Settings;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
@@ -28,10 +18,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.BroadcastReceiver;
 import android.os.Build;
-import android.os.Bundle;
-import android.widget.Toast;
 import java.util.List;
-import java.lang.Thread;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -172,20 +159,13 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 		wifi.setWifiEnabled(enabled);
 	}
 
-	//Send the ssid and password of a Wifi network into this to connect to the network.
-	//Example:  wifi.findAndConnect(ssid, password);
-	//After 10 seconds, a post telling you whether you are connected will pop up.
-	//Callback returns true if ssid is in the range
 	@ReactMethod
-	public void connectToProtectedSSID(String ssid, String password, Boolean isWep, Promise promise) {
-		List < ScanResult > results = wifi.getScanResults();
+	public void connectToProtectedSSID(final String ssid, final String password, Boolean isWep, final Promise promise) {
+
 		boolean connected = false;
-		for (ScanResult result: results) {
-			String resultString = "" + result.SSID;
-			if (ssid.equals(resultString)) {
-				connected = connectTo(result, password, ssid);
-			}
-		}
+
+		connected = connectTo(password, ssid);
+
 		if (connected) {
 			promise.resolve(true);
 		} else {
@@ -206,7 +186,7 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 	}
 
 	//Method to connect to WIFI Network
-	public Boolean connectTo(ScanResult result, String password, String ssid) {
+	public Boolean connectTo(String password, String ssid) {
 		if (!wifi.isWifiEnabled()) {
 			wifi.setWifiEnabled(true);
 		}
@@ -214,47 +194,15 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 		//Make new configuration
 		WifiConfiguration conf = new WifiConfiguration();
 
-        conf.SSID = ssid;
-
-		String capabilities = result.capabilities;
-
-		if (capabilities.toUpperCase().contains("WPA")) {
-			conf.SSID = String.format("\"%s\"", ssid);
-			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
-			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
-			conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
-			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
-			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
-			conf.preSharedKey = String.format("\"%s\"", password);
-		}	else if (capabilities.toUpperCase().contains("WEP")) {
-			conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
-			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
-			conf.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.OPEN);
-			conf.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.SHARED);
-			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
-			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP104);
-			if (password.matches("^[0-9a-fA-F]+$")) {
-				conf.wepKeys[0] = password;
-			} else {
-				conf.wepKeys[0] = "\"".concat(password).concat("\"");
-			}
-		} else {
-			conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
-			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
-			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
-			conf.allowedAuthAlgorithms.clear();
-			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
-			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP104);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
-			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
-		}
+		conf.SSID = String.format("\"%s\"", ssid);
+		conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+		conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+		conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
+		conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+		conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
+		conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
+		conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
+		conf.preSharedKey = String.format("\"%s\"", password);
 
 		//Remove the existing configuration for this netwrok
 		List<WifiConfiguration> mWifiConfigList = wifi.getConfiguredNetworks();
