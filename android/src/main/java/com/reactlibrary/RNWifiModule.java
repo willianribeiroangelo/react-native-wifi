@@ -93,16 +93,16 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 
 	//Method to force wifi usage if the user needs to send requests via wifi
 	//if it does not have internet connection. Useful for IoT applications, when
-	//the app needs to communicate and send requests to a device that have no 
+	//the app needs to communicate and send requests to a device that have no
 	//internet connection via wifi.
 
 	//Receives a boolean to enable forceWifiUsage if true, and disable if false.
-	//Is important to enable only when communicating with the device via wifi 
+	//Is important to enable only when communicating with the device via wifi
 	//and remember to disable it when disconnecting from device.
 	@ReactMethod
 	public void forceWifiUsage(boolean useWifi) {
         boolean canWriteFlag = false;
-		
+
         if (useWifi) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 
@@ -207,46 +207,53 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 
 	//Method to connect to WIFI Network
 	public Boolean connectTo(ScanResult result, String password, String ssid) {
+		if (!wifi.isWifiEnabled()) {
+			wifi.setWifiEnabled(true);
+		}
+
 		//Make new configuration
 		WifiConfiguration conf = new WifiConfiguration();
-		
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+
         conf.SSID = ssid;
-    } else {
-        conf.SSID = "\"" + ssid + "\"";
-    }
 
 		String capabilities = result.capabilities;
-		
-		if (capabilities.contains("WPA")  || 
-          capabilities.contains("WPA2") || 
-          capabilities.contains("WPA/WPA2 PSK")) {
 
-	    // appropriate ciper is need to set according to security type used,
-	    // ifcase of not added it will not be able to connect
-	    conf.preSharedKey = "\"" + password + "\"";
-	    
-	    conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
-			 conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
-	    
-	    conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
-	    
-	    conf.status = WifiConfiguration.Status.ENABLED;
-	    
-	    conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
-	    conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
-	    
-	    conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
-	    conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
-
-		}	else if (capabilities.contains("WEP")) {
-			conf.wepKeys[0] = "\"" + password + "\"";
-			conf.wepTxKeyIndex = 0;
+		if (capabilities.toUpperCase().contains("WPA")) {
+			conf.SSID = String.format("\"%s\"", ssid);
+			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+			conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
+			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
+			conf.preSharedKey = String.format("\"%s\"", password);
+		}	else if (capabilities.toUpperCase().contains("WEP")) {
 			conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
+			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+			conf.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.OPEN);
+			conf.allowedAuthAlgorithms.set(WifiConfiguration.AuthAlgorithm.SHARED);
+			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
 			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
-
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP104);
+			if (password.matches("^[0-9a-fA-F]+$")) {
+				conf.wepKeys[0] = password;
+			} else {
+				conf.wepKeys[0] = "\"".concat(password).concat("\"");
+			}
 		} else {
 			conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.NONE);
+			conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+			conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+			conf.allowedAuthAlgorithms.clear();
+			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+			conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP40);
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.WEP104);
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
+			conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
 		}
 
 		//Remove the existing configuration for this netwrok
@@ -254,34 +261,26 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 
 		int updateNetwork = -1;
 
-		for(WifiConfiguration wifiConfig : mWifiConfigList){
-			if(wifiConfig.SSID.equals(conf.SSID)){
-				conf.networkId = wifiConfig.networkId;
-				updateNetwork = wifi.updateNetwork(conf);
+		if (mWifiConfigList != null) {
+			for (WifiConfiguration wifiConfig : mWifiConfigList) {
+				if (wifiConfig.SSID.equals(conf.SSID)) {
+					conf.networkId = wifiConfig.networkId;
+					updateNetwork = wifi.updateNetwork(conf);
+				}
 			}
 		}
 
-    // If network not already in configured networks add new network
-		if ( updateNetwork == -1 ) {
-      updateNetwork = wifi.addNetwork(conf);
-      wifi.saveConfiguration();
-		};
-
-    if ( updateNetwork == -1 ) {
-      return false;
-    }
-
-    boolean disconnect = wifi.disconnect();
-		if ( !disconnect ) {
+		/// If network not already in configured networks add new network
+		if (updateNetwork == -1) {
+			updateNetwork = wifi.addNetwork(conf);
+			wifi.saveConfiguration();
+		}
+		if (updateNetwork == -1) {
 			return false;
-		};
+		}
 
-		boolean enableNetwork = wifi.enableNetwork(updateNetwork, true);
-		if ( !enableNetwork ) {
-			return false;
-		};
-
-		return true;
+		wifi.enableNetwork(updateNetwork, true);
+		return wifi.reconnect();
 	}
 
 	//Disconnect current Wifi.
@@ -322,12 +321,12 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 	}
 
 	//This method will return current wifi frequency
-	@ReactMethod
-	public void getFrequency(final Callback callback) {
-		WifiInfo info = wifi.getConnectionInfo();
-		int frequency = info.getFrequency();
-		callback.invoke(frequency);
-	}
+//	@ReactMethod
+//////	public void getFrequency(final Callback callback) {
+//////		WifiInfo info = wifi.getConnectionInfo();
+//////		int frequency = info.getFrequency();
+//////		callback.invoke(frequency);
+//////	}
 
 	//This method will return current IP
 	@ReactMethod
