@@ -1,28 +1,21 @@
 package com.reactlibrary;
 
-import com.facebook.react.uimanager.*;
-import com.facebook.react.bridge.*;
-import android.provider.Settings;
-import android.net.wifi.ScanResult;
-import android.net.wifi.WifiManager;
-import android.net.wifi.WifiConfiguration;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import android.net.NetworkRequest;
-import android.net.NetworkCapabilities;
-import android.net.Network;
-import android.net.Uri;
-import android.net.wifi.WifiInfo;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.BroadcastReceiver;
-import android.os.Build;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
+import android.net.Uri;
+import android.net.wifi.ScanResult;
+import android.net.wifi.WifiManager;
+import android.provider.Settings;
+import com.facebook.react.bridge.ReactApplicationContext;
 import java.util.List;
-
+import javax.security.auth.callback.Callback;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
 
 public class RNWifiModule extends ReactContextBaseJavaModule {
 
@@ -173,6 +166,20 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 		}
 	}
 
+	@ReactMethod
+	public void saveSSID(final String ssid, Boolean isWep, final Promise promise) {
+
+		boolean connected = false;
+
+		connected = saveTo( ssid);
+
+		if (connected) {
+			promise.resolve(true);
+		} else {
+			promise.reject("Can't connect to wifi!", "Can't connect to wifi!");
+		}
+	}
+
 	//Use this method to check if the device is currently connected to Wifi.
 	@ReactMethod
 	public void connectionStatus(Callback connectionStatusResult) {
@@ -229,6 +236,51 @@ public class RNWifiModule extends ReactContextBaseJavaModule {
 
 		wifi.enableNetwork(updateNetwork, true);
 		return wifi.reconnect();
+	}
+
+	public Boolean saveTo(String ssid) {
+		if (!wifi.isWifiEnabled()) {
+			wifi.setWifiEnabled(true);
+		}
+
+		//Make new configuration
+		WifiConfiguration conf = new WifiConfiguration();
+
+		conf.SSID = String.format("\"%s\"", ssid);
+		conf.allowedProtocols.set(WifiConfiguration.Protocol.RSN);
+		conf.allowedProtocols.set(WifiConfiguration.Protocol.WPA);
+		conf.allowedKeyManagement.set(WifiConfiguration.KeyMgmt.WPA_PSK);
+		conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.CCMP);
+		conf.allowedPairwiseCiphers.set(WifiConfiguration.PairwiseCipher.TKIP);
+		conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.CCMP);
+		conf.allowedGroupCiphers.set(WifiConfiguration.GroupCipher.TKIP);
+		conf.preSharedKey = String.format("\"%s\"", password);
+
+		//Remove the existing configuration for this netwrok
+		List<WifiConfiguration> mWifiConfigList = wifi.getConfiguredNetworks();
+
+		int updateNetwork = -1;
+
+		if (mWifiConfigList != null) {
+			for (WifiConfiguration wifiConfig : mWifiConfigList) {
+				if (wifiConfig.SSID.equals(conf.SSID)) {
+					conf.networkId = wifiConfig.networkId;
+					updateNetwork = wifi.updateNetwork(conf);
+				}
+			}
+		}
+
+		/// If network not already in configured networks add new network
+		if (updateNetwork == -1) {
+			updateNetwork = wifi.addNetwork(conf);
+			wifi.saveConfiguration();
+		}
+		if (updateNetwork == -1) {
+			return false;
+		}
+
+		wifi.enableNetwork(updateNetwork, true);
+		return true;
 	}
 
 	//Disconnect current Wifi.
